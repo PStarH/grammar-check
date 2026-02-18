@@ -26,9 +26,7 @@ class CheckOptions(BaseModel):
 class GrammarCheckRequest(BaseModel):
     """Request model for grammar check endpoint."""
 
-    requestId: str | None = Field(
-        default=None, description="Optional client-provided request ID"
-    )
+    requestId: str | None = Field(default=None, description="Optional client-provided request ID")
     contentType: Literal["text/html"] = Field(
         default="text/html", description="Content type (currently only text/html supported)"
     )
