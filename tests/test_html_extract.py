@@ -1,5 +1,5 @@
 """Tests for HTML text extraction."""
-import pytest
+
 
 from app.html_extract import HTMLExtractor, extract_plain_text
 

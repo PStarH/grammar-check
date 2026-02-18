@@ -1,4 +1,5 @@
 """FastAPI application for grammar checking service."""
+
 import logging
 import time
 import uuid
@@ -20,8 +21,7 @@ from app.schemas import (
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ grammar_service: GrammarService = None
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown."""
     global grammar_service
-    
+
     # Startup
     logger.info("Starting grammar check service...")
     try:
@@ -44,9 +44,9 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to initialize service: {e}")
         # Allow app to start even if LLM is not configured
         grammar_service = GrammarService(llm_client=None)
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down grammar check service...")
 
@@ -81,57 +81,54 @@ async def health_check():
 @app.post("/v1/grammar/check", response_model=GrammarCheckResponse)
 async def check_grammar(request: GrammarCheckRequest):
     """Check grammar in HTML content.
-    
+
     Args:
         request: Grammar check request
-        
+
     Returns:
         Grammar check response with issues
     """
     start_time = time.time()
-    
+
     # Generate request ID if not provided
     request_id = request.requestId or str(uuid.uuid4())
-    
+
     logger.info(
         f"Processing request {request_id}: "
         f"mode={request.options.mode}, "
         f"html_length={len(request.html)}"
     )
-    
+
     try:
         # Extract plain text from HTML
-        plain_text = extract_plain_text(
-            request.html,
-            skip_tags=request.options.skipTags
-        )
-        
-        logger.info(
-            f"Request {request_id}: Extracted {len(plain_text)} characters"
-        )
-        
+        plain_text = extract_plain_text(request.html, skip_tags=request.options.skipTags)
+
+        logger.info(f"Request {request_id}: Extracted {len(plain_text)} characters")
+
         # Check grammar
         if not grammar_service or not grammar_service.llm_client:
             if request.options.mode in ["best_quality", "hybrid"]:
                 raise HTTPException(
                     status_code=503,
-                    detail="LLM service not configured. Please set LLM_API_KEY environment variable."
+                    detail=(
+                        "LLM service not configured. "
+                        "Please set LLM_API_KEY environment variable."
+                    ),
                 )
-        
+
         issues, engine = await grammar_service.check_text(
             plain_text,
             mode=request.options.mode,
             max_suggestions=request.options.maxSuggestions,
         )
-        
+
         # Calculate latency
         latency_ms = int((time.time() - start_time) * 1000)
-        
+
         logger.info(
-            f"Request {request_id}: Found {len(issues)} issues "
-            f"in {latency_ms}ms using {engine}"
+            f"Request {request_id}: Found {len(issues)} issues " f"in {latency_ms}ms using {engine}"
         )
-        
+
         # Build response
         response = GrammarCheckResponse(
             requestId=request_id,
@@ -143,25 +140,23 @@ async def check_grammar(request: GrammarCheckRequest):
                 engine=engine,
             ),
         )
-        
+
         # Add corrected HTML if requested
         if request.options.returnCorrectedHtml:
             # This would require implementing HTML correction logic
             # For now, return None
             response.correctedHtml = None
-        
+
         return response
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Request {request_id} failed: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Grammar check failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Grammar check failed: {str(e)}")
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

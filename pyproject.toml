@@ -40,7 +40,7 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
-ignore = []
+ignore = ["N815"]  # Ignore mixedCase variable names in Pydantic models
 
 [tool.black]
 line-length = 100

@@ -1,5 +1,5 @@
 """Tests for API endpoints."""
-import pytest
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -10,7 +10,7 @@ client = TestClient(app)
 def test_health_check():
     """Test health check endpoint."""
     response = client.get("/health")
-    
+
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "ok"
@@ -23,13 +23,13 @@ def test_grammar_check_basic_request():
         "html": "<p>Hello world</p>",
         "language": "en-US",
     }
-    
+
     response = client.post("/v1/grammar/check", json=request_data)
-    
+
     # May succeed or fail depending on LLM configuration
     # Just check the response structure
     assert response.status_code in [200, 500, 503]
-    
+
     if response.status_code == 200:
         data = response.json()
         assert "plainText" in data
@@ -43,13 +43,11 @@ def test_grammar_check_with_skip_tags():
     request_data = {
         "html": "<p>Show this</p><script>Hide this</script>",
         "language": "en-US",
-        "options": {
-            "skipTags": ["script"]
-        }
+        "options": {"skipTags": ["script"]},
     }
-    
+
     response = client.post("/v1/grammar/check", json=request_data)
-    
+
     if response.status_code == 200:
         data = response.json()
         assert "Show this" in data["plainText"]
@@ -63,9 +61,9 @@ def test_grammar_check_with_request_id():
         "html": "<p>Test</p>",
         "language": "en-US",
     }
-    
+
     response = client.post("/v1/grammar/check", json=request_data)
-    
+
     if response.status_code == 200:
         data = response.json()
         assert data["requestId"] == "test-request-123"
@@ -78,9 +76,9 @@ def test_grammar_check_invalid_content_type():
         "html": "Test",
         "language": "en-US",
     }
-    
+
     response = client.post("/v1/grammar/check", json=request_data)
-    
+
     # Should fail validation
     assert response.status_code == 422
 
@@ -90,9 +88,9 @@ def test_grammar_check_missing_html():
     request_data = {
         "language": "en-US",
     }
-    
+
     response = client.post("/v1/grammar/check", json=request_data)
-    
+
     # Should fail validation
     assert response.status_code == 422
 
@@ -103,9 +101,9 @@ def test_grammar_check_empty_html():
         "html": "",
         "language": "en-US",
     }
-    
+
     response = client.post("/v1/grammar/check", json=request_data)
-    
+
     if response.status_code == 200:
         data = response.json()
         assert data["plainText"] == ""
@@ -121,10 +119,10 @@ def test_grammar_check_options():
             "mode": "best_quality",
             "maxSuggestions": 3,
             "returnCorrectedHtml": False,
-        }
+        },
     }
-    
+
     response = client.post("/v1/grammar/check", json=request_data)
-    
+
     # Structure validation
     assert response.status_code in [200, 500, 503]
