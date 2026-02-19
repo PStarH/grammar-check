@@ -1,0 +1,16 @@
+{
+  "id": "case09_entities",
+  "html": "<p>Tom&nbsp;dont&nbsp;know.</p>",
+  "language": "en-US",
+  "expectedIssues": [
+    {
+      "type": "grammar",
+      "span": {
+        "start": 4,
+        "end": 8
+      },
+      "spanText": "dont",
+      "expectedReplacement": "doesn't"
+    }
+  ]
+}

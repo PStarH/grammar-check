@@ -1,0 +1,16 @@
+{
+  "id": "case10_br",
+  "html": "<p>First line.<br>Second line are wrong.</p>",
+  "language": "en-US",
+  "expectedIssues": [
+    {
+      "type": "grammar",
+      "span": {
+        "start": 23,
+        "end": 26
+      },
+      "spanText": "are",
+      "expectedReplacement": "is"
+    }
+  ]
+}

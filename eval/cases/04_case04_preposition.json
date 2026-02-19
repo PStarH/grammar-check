@@ -1,0 +1,16 @@
+{
+  "id": "case04_preposition",
+  "html": "<p>We discussed about the plan.</p>",
+  "language": "en-US",
+  "expectedIssues": [
+    {
+      "type": "style",
+      "span": {
+        "start": 3,
+        "end": 18
+      },
+      "spanText": "discussed about",
+      "expectedReplacement": "discussed"
+    }
+  ]
+}

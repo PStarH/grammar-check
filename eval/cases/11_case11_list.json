@@ -1,0 +1,16 @@
+{
+  "id": "case11_list",
+  "html": "<ul><li>He walk fast.</li><li>They is ready.</li></ul>",
+  "language": "en-US",
+  "expectedIssues": [
+    {
+      "type": "grammar",
+      "span": {
+        "start": 3,
+        "end": 7
+      },
+      "spanText": "walk",
+      "expectedReplacement": "walks"
+    }
+  ]
+}

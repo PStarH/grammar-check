@@ -1,0 +1,16 @@
+{
+  "id": "case14_quotes",
+  "html": "<p>She said, \"I has a car\" yesterday.</p>",
+  "language": "en-US",
+  "expectedIssues": [
+    {
+      "type": "grammar",
+      "span": {
+        "start": 13,
+        "end": 16
+      },
+      "spanText": "has",
+      "expectedReplacement": "have"
+    }
+  ]
+}

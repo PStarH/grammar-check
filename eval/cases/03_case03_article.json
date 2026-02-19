@@ -1,0 +1,16 @@
+{
+  "id": "case03_article",
+  "html": "<p>I saw elephant in zoo.</p>",
+  "language": "en-US",
+  "expectedIssues": [
+    {
+      "type": "grammar",
+      "span": {
+        "start": 2,
+        "end": 14
+      },
+      "spanText": "saw elephant",
+      "expectedReplacement": "saw an elephant"
+    }
+  ]
+}

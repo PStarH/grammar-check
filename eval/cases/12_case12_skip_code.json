@@ -1,0 +1,14 @@
+{
+  "id": "case12_skip_code",
+  "html": "<p>Correct sentence.</p><code>He go there</code>",
+  "language": "en-US",
+  "expectedIssues": [],
+  "options": {
+    "skipTags": [
+      "script",
+      "style",
+      "code",
+      "pre"
+    ]
+  }
+}

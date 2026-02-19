@@ -1,0 +1,16 @@
+{
+  "id": "case13_skip_script",
+  "html": "<script>She have issue</script><p>They was there.</p>",
+  "language": "en-US",
+  "expectedIssues": [
+    {
+      "type": "grammar",
+      "span": {
+        "start": 19,
+        "end": 22
+      },
+      "spanText": "was",
+      "expectedReplacement": "were"
+    }
+  ]
+}

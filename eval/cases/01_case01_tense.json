@@ -1,0 +1,16 @@
+{
+  "id": "case01_tense",
+  "html": "<p>He go to school yesterday.</p>",
+  "language": "en-US",
+  "expectedIssues": [
+    {
+      "type": "grammar",
+      "span": {
+        "start": 3,
+        "end": 5
+      },
+      "spanText": "go",
+      "expectedReplacement": "went"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "id": "case06_spelling",
+  "html": "<p>This sentense is wierd.</p>",
+  "language": "en-US",
+  "expectedIssues": [
+    {
+      "type": "spelling",
+      "span": {
+        "start": 17,
+        "end": 22
+      },
+      "spanText": "wierd",
+      "expectedReplacement": "weird"
+    }
+  ]
+}

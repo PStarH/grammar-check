@@ -1,0 +1,16 @@
+{
+  "id": "case02_agreement",
+  "html": "<p>She have two dogs.</p>",
+  "language": "en-US",
+  "expectedIssues": [
+    {
+      "type": "grammar",
+      "span": {
+        "start": 4,
+        "end": 8
+      },
+      "spanText": "have",
+      "expectedReplacement": "has"
+    }
+  ]
+}

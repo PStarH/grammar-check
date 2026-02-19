@@ -1,0 +1,16 @@
+{
+  "id": "case08_nested_html",
+  "html": "<div><p>The cat <strong>are</strong> sleeping.</p></div>",
+  "language": "en-US",
+  "expectedIssues": [
+    {
+      "type": "grammar",
+      "span": {
+        "start": 8,
+        "end": 11
+      },
+      "spanText": "are",
+      "expectedReplacement": "is"
+    }
+  ]
+}
