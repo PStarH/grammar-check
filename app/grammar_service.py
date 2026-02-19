@@ -132,8 +132,6 @@ class GrammarService:
         issues: list[Issue] = []
         chunk_len = len(chunk.text)
         for draft in payload.issues:
-            if draft.spanEnd <= draft.spanStart:
-                continue
             # Clamp spans to valid chunk text bounds
             draft.spanStart = max(0, min(draft.spanStart, chunk_len))
             draft.spanEnd = max(0, min(draft.spanEnd, chunk_len))
