@@ -27,6 +27,7 @@ class TTLCache:
     def __init__(self, ttl_seconds: int) -> None:
         self.ttl_seconds = ttl_seconds
         self._data: dict[str, CacheEntry] = {}
+        self._set_count = 0
 
     def get(self, key: str) -> object | None:
         item = self._data.get(key)
@@ -39,6 +40,15 @@ class TTLCache:
 
     def set(self, key: str, value: object) -> None:
         self._data[key] = CacheEntry(expires_at=time.time() + self.ttl_seconds, value=value)
+        self._set_count += 1
+        if self._set_count % 100 == 0:
+            self._prune_expired()
+
+    def _prune_expired(self) -> None:
+        now = time.time()
+        expired_keys = [k for k, v in self._data.items() if v.expires_at < now]
+        for k in expired_keys:
+            self._data.pop(k, None)
 
 
 class GrammarService:
@@ -64,7 +74,7 @@ class GrammarService:
         request_key = hashlib.sha256(json.dumps(key_payload, sort_keys=True).encode()).hexdigest()
         cached = self.request_cache.get(request_key)
         if cached:
-            out: CheckResponse = cached  # type: ignore[assignment]
+            out: CheckResponse = cached.model_copy(deep=True)  # type: ignore[assignment]
             out.stats.cacheHit = True
             return out
 
@@ -114,13 +124,17 @@ class GrammarService:
         key = hashlib.sha256(f"{language}|{chunk.text}".encode()).hexdigest()
         cached = self.chunk_cache.get(key)
         if cached:
-            return cached  # type: ignore[return-value]
+            return [issue.model_copy(deep=True) for issue in cached]  # type: ignore[return-value,union-attr]
 
         async with self.semaphore:
             payload = await self.llm.extract_issues(chunk.text, language)
 
         issues: list[Issue] = []
+        chunk_len = len(chunk.text)
         for draft in payload.issues:
+            # Clamp spans to valid chunk text bounds
+            draft.spanStart = max(0, min(draft.spanStart, chunk_len))
+            draft.spanEnd = max(0, min(draft.spanEnd, chunk_len))
             if draft.spanEnd <= draft.spanStart:
                 continue
             if self._looks_like_false_positive(chunk.text, draft.spanStart, draft.spanEnd):

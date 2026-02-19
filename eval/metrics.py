@@ -36,15 +36,22 @@ def score_case(predicted: list[dict], expected: list[dict]) -> tuple[int, int, i
                 matched = True
                 matched_expected.add(idx)
                 tp += 1
+                # Score suggestion quality against the matched expected issue
+                expected_should_change = exp.get("expectedShouldChange", True)
+                if expected_should_change:
+                    sq_total += 1
+                    expected_repl = exp.get("expectedReplacement")
+                    if expected_repl is not None:
+                        pred_repl = pred.get("replacement")
+                        if (
+                            isinstance(pred_repl, str)
+                            and isinstance(expected_repl, str)
+                            and pred_repl.strip() == expected_repl.strip()
+                        ):
+                            sq_ok += 1
                 break
         if not matched:
             fp += 1
-        if pred.get("expectedShouldChange", True):
-            sq_total += 1
-            repl = pred.get("replacement")
-            orig = pred.get("context", "")
-            if repl and repl.strip() and repl.strip() != orig.strip():
-                sq_ok += 1
 
     fn = len(expected) - len(matched_expected)
     return tp, fp, fn, sq_ok, sq_total

@@ -20,6 +20,7 @@ class LLMClient:
         self.timeout = float(os.getenv("LLM_TIMEOUT_SECONDS", "12"))
         self.prompt_version = os.getenv("PROMPT_VERSION", "v1")
         self.max_retries = int(os.getenv("LLM_MAX_RETRIES", "2"))
+        self._client = httpx.AsyncClient(timeout=self.timeout)
 
     def _load_prompt(self, stage: str) -> str:
         path = Path("prompts") / f"{self.prompt_version}_{stage}.txt"
@@ -36,13 +37,12 @@ class LLMClient:
                 {"role": "user", "content": user},
             ],
         }
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.post(
-                f"{self.base_url}/chat/completions", headers=headers, json=payload
-            )
-            response.raise_for_status()
-            data = response.json()
-            return data["choices"][0]["message"]["content"]
+        response = await self._client.post(
+            f"{self.base_url}/chat/completions", headers=headers, json=payload
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data["choices"][0]["message"]["content"]
 
     async def extract_issues(self, chunk_text: str, language: str) -> LLMIssuesPayload:
         detect_prompt = self._load_prompt("detect")
@@ -71,15 +71,20 @@ class LLMClient:
         errors: list[str] = []
         for attempt in range(self.max_retries + 1):
             try:
-                content = await self._chat_completion(system_prompt, compact_prompt)
+                system_prompt_attempt = (
+                    system_prompt if attempt == 0 else system_prompt + "\nReturn JSON only."
+                )
+                content = await self._chat_completion(system_prompt_attempt, compact_prompt)
                 parsed = json.loads(content)
                 return LLMIssuesPayload.model_validate(parsed)
             except (httpx.HTTPError, json.JSONDecodeError, ValidationError) as exc:
                 errors.append(str(exc))
                 if attempt == self.max_retries:
                     break
-                compact_prompt = compact_prompt + "\nReturn JSON only."
                 await asyncio.sleep(0.2 * (attempt + 1))
         raise RuntimeError(
             f"LLM extraction failed after retries: {errors[-1] if errors else 'unknown error'}"
         )
+
+    async def close(self) -> None:
+        await self._client.aclose()
