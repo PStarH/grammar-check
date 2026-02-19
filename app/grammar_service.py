@@ -1,7 +1,10 @@
 """Grammar checking service with chunking and engine orchestration."""
 
 import logging
+import os
 import re
+
+import language_tool_python
 
 from app.llm_client import LLMClient
 from app.schemas import GrammarIssue
@@ -21,12 +24,27 @@ class GrammarService:
         self.llm_client = llm_client
         self.max_chunk_size = 2000  # characters per chunk
         self.max_input_length = 50000  # maximum input length
+        
+        # Initialize LanguageTool
+        self._language_tool = None
+        self._language_tool_enabled = os.getenv("LANGUAGETOOL_ENABLED", "true").lower() == "true"
+        if self._language_tool_enabled:
+            try:
+                languagetool_url = os.getenv("LANGUAGETOOL_URL")
+                if languagetool_url:
+                    self._language_tool = language_tool_python.LanguageToolPublicAPI(languagetool_url)
+                else:
+                    self._language_tool = language_tool_python.LanguageTool('en-US')
+                logger.info("LanguageTool initialized successfully")
+            except Exception as e:
+                logger.warning(f"Failed to initialize LanguageTool: {e}")
 
     async def check_text(
         self,
         text: str,
         mode: str = "best_quality",
         max_suggestions: int = 5,
+        use_ai: bool = True,
     ) -> tuple[list[GrammarIssue], str]:
         """Check text for grammar issues.
 
@@ -34,12 +52,13 @@ class GrammarService:
             text: Plain text to check
             mode: Checking mode (best_quality, hybrid, fast)
             max_suggestions: Maximum suggestions per issue
+            use_ai: Whether to use AI (LLM) for checking
 
         Returns:
             Tuple of (issues list, engine used)
         """
         if not text or not text.strip():
-            if mode == "fast":
+            if mode == "fast" or not use_ai:
                 return [], "languagetool"
             if mode == "hybrid":
                 return [], "hybrid"
@@ -49,6 +68,10 @@ class GrammarService:
         if len(text) > self.max_input_length:
             text = text[: self.max_input_length]
             logger.warning(f"Text truncated to {self.max_input_length} characters")
+
+        # If useAI is False, force fast mode (LanguageTool only)
+        if not use_ai:
+            mode = "fast"
 
         engine = "llm"
 
@@ -137,10 +160,85 @@ class GrammarService:
         Returns:
             List of grammar issues
         """
-        # This is a placeholder for LanguageTool integration
-        # In a full implementation, this would use language-tool-python
-        logger.info("LanguageTool check not implemented, returning empty list")
-        return []
+        if not self._language_tool:
+            logger.warning("LanguageTool not available, returning empty list")
+            return []
+        
+        try:
+            # LanguageTool is synchronous, but we're running in async context
+            # For now, we'll run it synchronously - could be improved with run_in_executor
+            matches = self._language_tool.check(text)
+            
+            issues = []
+            for match in matches:
+                # Map LanguageTool match to GrammarIssue
+                issue_type = self._map_languagetool_type(match)
+                severity = self._map_languagetool_severity(match)
+                
+                # Get context around the error
+                context_start = max(0, match.offset - 10)
+                context_end = min(len(text), match.offset + match.errorLength + 10)
+                context = text[context_start:context_end]
+                
+                issue = GrammarIssue(
+                    type=issue_type,
+                    severity=severity,
+                    message=match.message,
+                    shortMessage=match.ruleId or "Grammar Issue",
+                    plainRange={
+                        "start": match.offset,
+                        "end": match.offset + match.errorLength
+                    },
+                    context=context,
+                    suggestions=[repl for repl in match.replacements[:5]],
+                    replacement=match.replacements[0] if match.replacements else None,
+                    confidence=0.7  # LanguageTool doesn't provide confidence scores
+                )
+                issues.append(issue)
+            
+            return issues
+            
+        except Exception as e:
+            logger.error(f"LanguageTool check failed: {e}")
+            return []
+    
+    def _map_languagetool_type(self, match) -> str:
+        """Map LanguageTool issue type to our type.
+        
+        Args:
+            match: LanguageTool match object
+            
+        Returns:
+            Issue type: "grammar", "spelling", or "style"
+        """
+        category = match.category.lower() if hasattr(match, 'category') else ""
+        rule_id = (match.ruleId or "").lower()
+        
+        if "spell" in category or "spell" in rule_id or "typo" in category:
+            return "spelling"
+        elif "style" in category or "style" in rule_id:
+            return "style"
+        else:
+            return "grammar"
+    
+    def _map_languagetool_severity(self, match) -> str:
+        """Map LanguageTool issue type to severity.
+        
+        Args:
+            match: LanguageTool match object
+            
+        Returns:
+            Severity: "error", "warning", or "info"
+        """
+        # LanguageTool uses issueType which can be: addition, uncategorized, misspelling, etc.
+        issue_type = match.issueType.lower() if hasattr(match, 'issueType') else ""
+        
+        if "misspelling" in issue_type or "confusion" in issue_type:
+            return "error"
+        elif "style" in issue_type or "hint" in issue_type:
+            return "info"
+        else:
+            return "warning"
 
     def _split_into_chunks(self, text: str) -> list[str]:
         """Split text into chunks for processing.

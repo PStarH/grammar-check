@@ -107,12 +107,12 @@ async def check_grammar(request: GrammarCheckRequest):
 
         # Check grammar
         if not grammar_service or not grammar_service.llm_client:
-            if request.options.mode in ["best_quality", "hybrid"]:
+            if request.options.useAI and request.options.mode in ["best_quality", "hybrid"]:
                 raise HTTPException(
                     status_code=503,
                     detail=(
                         "LLM service not configured. "
-                        "Please set LLM_API_KEY environment variable."
+                        "Please set LLM_API_KEY environment variable or set useAI=false."
                     ),
                 )
 
@@ -120,6 +120,7 @@ async def check_grammar(request: GrammarCheckRequest):
             plain_text,
             mode=request.options.mode,
             max_suggestions=request.options.maxSuggestions,
+            use_ai=request.options.useAI,
         )
 
         # Calculate latency

@@ -19,6 +19,10 @@ class CheckOptions(BaseModel):
             "hybrid (LLM+LanguageTool), fast (LanguageTool only)"
         ),
     )
+    useAI: bool = Field(
+        default=True,
+        description="Whether to use AI (LLM) for grammar checking. If false, only LanguageTool is used."
+    )
     returnCorrectedHtml: bool = Field(default=False, description="Whether to return corrected HTML")
     maxSuggestions: int = Field(default=5, description="Maximum number of suggestions per issue")
 
