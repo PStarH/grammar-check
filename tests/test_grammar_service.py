@@ -70,7 +70,43 @@ async def test_check_text_empty():
     issues, engine = await service.check_text("")
 
     assert issues == []
-    assert engine == "none"
+    assert engine == "llm"
+
+
+@pytest.mark.asyncio
+async def test_check_text_empty_hybrid_engine():
+    """Empty hybrid checks should return schema-supported engine value."""
+    service = GrammarService()
+    issues, engine = await service.check_text("", mode="hybrid")
+    assert issues == []
+    assert engine == "hybrid"
+
+
+class _AlwaysFailLLMClient:
+    async def check_grammar(self, text: str, max_suggestions: int = 5):  # noqa: ARG002
+        raise TimeoutError("LLM timeout")
+
+
+@pytest.mark.asyncio
+async def test_check_with_llm_raises_when_all_chunks_fail():
+    """When all chunks fail, _check_with_llm should raise to enable fallback."""
+    service = GrammarService(llm_client=_AlwaysFailLLMClient())
+    service.max_chunk_size = 5
+
+    with pytest.raises(RuntimeError, match="All LLM chunk checks failed"):
+        await service._check_with_llm("This input forces chunking and failures.")
+
+
+@pytest.mark.asyncio
+async def test_hybrid_mode_falls_back_when_all_chunks_fail():
+    """Hybrid mode should report fallback when LLM fails on all chunks."""
+    service = GrammarService(llm_client=_AlwaysFailLLMClient())
+    service.max_chunk_size = 5
+
+    issues, engine = await service.check_text("This input forces fallback.", mode="hybrid")
+
+    assert issues == []
+    assert engine == "fallback"
 
 
 @pytest.mark.asyncio

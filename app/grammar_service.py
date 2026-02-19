@@ -39,7 +39,11 @@ class GrammarService:
             Tuple of (issues list, engine used)
         """
         if not text or not text.strip():
-            return [], "none"
+            if mode == "fast":
+                return [], "languagetool"
+            if mode == "hybrid":
+                return [], "hybrid"
+            return [], "llm"
 
         # Enforce max length
         if len(text) > self.max_input_length:
@@ -71,7 +75,7 @@ class GrammarService:
         except Exception as e:
             logger.error(f"Grammar check failed: {e}")
             # Return empty list on error
-            return [], "error"
+            return [], "fallback"
 
     async def _check_with_llm(
         self,
@@ -95,6 +99,8 @@ class GrammarService:
 
         all_issues = []
         offset = 0
+        failures = 0
+        last_error = None
 
         for chunk in chunks:
             try:
@@ -112,9 +118,13 @@ class GrammarService:
 
             except Exception as e:
                 logger.error(f"Failed to check chunk at offset {offset}: {e}")
-                # Continue with remaining chunks
+                failures += 1
+                last_error = e
 
             offset += len(chunk)
+
+        if failures == len(chunks):
+            raise RuntimeError("All LLM chunk checks failed") from last_error
 
         return all_issues
 

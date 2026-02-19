@@ -39,8 +39,10 @@ class HTMLExtractor:
             for tag in soup.find_all(tag_name):
                 tag.decompose()
 
-        # Extract text with normalization
-        text = self._extract_text_recursive(soup)
+        # Extract text with normalization. Prefer body content so non-visible
+        # head metadata (title, meta, etc.) is excluded from plain text.
+        root = soup.body if soup.body is not None else soup
+        text = self._extract_text_recursive(root)
 
         # Normalize whitespace
         text = self._normalize_whitespace(text)

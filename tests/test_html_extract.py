@@ -105,7 +105,7 @@ def test_complex_html():
     </html>
     """
     result = extract_plain_text(html)
-    assert "Test Page" in result
+    assert "Test Page" not in result
     assert "Main Title" in result
     assert "test" in result
     assert "paragraph" in result
@@ -114,6 +114,14 @@ def test_complex_html():
     assert "Item 2" in result
     assert "console.log" not in result
     assert "color: red" not in result
+
+
+def test_head_content_excluded_from_plain_text():
+    """Head metadata should not be included in extracted text."""
+    html = "<html><head><title>Hidden title</title></head><body><p>Visible text</p></body></html>"
+    result = extract_plain_text(html)
+    assert "Hidden title" not in result
+    assert "Visible text" in result
 
 
 def test_malformed_html():
