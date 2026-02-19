@@ -1,15 +1,21 @@
 """Grammar checking service with chunking and engine orchestration."""
 
+import asyncio
 import logging
 import os
 import re
-
-import language_tool_python
 
 from app.llm_client import LLMClient
 from app.schemas import GrammarIssue
 
 logger = logging.getLogger(__name__)
+
+try:
+    import language_tool_python
+    _LANGUAGE_TOOL_AVAILABLE = True
+except ImportError:
+    language_tool_python = None  # type: ignore[assignment]
+    _LANGUAGE_TOOL_AVAILABLE = False
 
 
 class GrammarService:
@@ -28,7 +34,7 @@ class GrammarService:
         # Initialize LanguageTool
         self._language_tool = None
         self._language_tool_enabled = os.getenv("LANGUAGETOOL_ENABLED", "true").lower() == "true"
-        if self._language_tool_enabled:
+        if self._language_tool_enabled and _LANGUAGE_TOOL_AVAILABLE:
             try:
                 languagetool_url = os.getenv("LANGUAGETOOL_URL")
                 if languagetool_url:
@@ -38,6 +44,8 @@ class GrammarService:
                 logger.info("LanguageTool initialized successfully")
             except Exception as e:
                 logger.warning(f"Failed to initialize LanguageTool: {e}")
+        elif self._language_tool_enabled and not _LANGUAGE_TOOL_AVAILABLE:
+            logger.info("language-tool-python not installed; LanguageTool checking disabled")
 
     async def check_text(
         self,
@@ -165,9 +173,8 @@ class GrammarService:
             return []
         
         try:
-            # LanguageTool is synchronous, but we're running in async context
-            # For now, we'll run it synchronously - could be improved with run_in_executor
-            matches = self._language_tool.check(text)
+            # LanguageTool is synchronous; run in a thread to avoid blocking the event loop
+            matches = await asyncio.to_thread(self._language_tool.check, text)
             
             issues = []
             for match in matches:
