@@ -4,7 +4,7 @@ import json
 import logging
 import os
 
-from openai import OpenAI
+from openai import AsyncOpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.schemas import GrammarIssue
@@ -35,7 +35,7 @@ class LLMClient:
         if not self.api_key:
             raise ValueError("LLM_API_KEY must be set")
 
-        self.client = OpenAI(
+        self.client = AsyncOpenAI(
             api_key=self.api_key,
             base_url=self.base_url,
         )
@@ -67,7 +67,7 @@ class LLMClient:
         prompt = self._build_prompt(text, max_suggestions)
 
         try:
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {

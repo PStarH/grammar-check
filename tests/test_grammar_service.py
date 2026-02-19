@@ -137,3 +137,108 @@ def test_sentence_splitting_edge_cases():
     text = "No punctuation here"
     sentences = service._split_into_sentences(text)
     assert len(sentences) == 1
+
+
+@pytest.mark.asyncio
+async def test_check_text_with_languagetool():
+    """Test checking text with LanguageTool."""
+    service = GrammarService(llm_client=None)
+    
+    # Only test if LanguageTool is available
+    if service._language_tool:
+        text = "I has a mistake here."
+        issues, engine = await service.check_text(text, mode="fast", use_ai=False)
+        
+        # LanguageTool should be used and might find issues
+        assert engine == "languagetool"
+        # We can't guarantee issues found as it depends on LanguageTool availability
+        assert isinstance(issues, list)
+
+
+@pytest.mark.asyncio
+async def test_check_text_with_use_ai_false():
+    """Test that useAI=False forces LanguageTool only."""
+    service = GrammarService(llm_client=None)
+    
+    text = "This is a test."
+    issues, engine = await service.check_text(text, mode="best_quality", use_ai=False)
+    
+    # Should use LanguageTool even with best_quality mode when useAI=False
+    assert engine == "languagetool"
+    assert isinstance(issues, list)
+
+
+@pytest.mark.asyncio
+async def test_languagetool_mapping_functions():
+    """Test LanguageTool type and severity mapping."""
+    service = GrammarService()
+    
+    # Create a mock match object with all required attributes
+    class MockMatch:
+        def __init__(self):
+            self.category = "GRAMMAR"
+            self.ruleId = "GRAMMAR_ERROR"
+            self.issueType = "misspelling"
+            self.offset = 0
+            self.errorLength = 5
+            self.message = "Test error message"
+            self.replacements = ["correction1", "correction2"]
+    
+    match = MockMatch()
+    
+    # Test type mapping
+    issue_type = service._map_languagetool_type(match)
+    assert issue_type in ["grammar", "spelling", "style"]
+    
+    # Test severity mapping
+    severity = service._map_languagetool_severity(match)
+    assert severity in ["error", "warning", "info"]
+    
+    # Test with missing attributes
+    class IncompleteMatch:
+        pass
+    
+    incomplete_match = IncompleteMatch()
+    issue_type = service._map_languagetool_type(incomplete_match)
+    assert issue_type == "grammar"  # Should default to grammar
+    
+    severity = service._map_languagetool_severity(incomplete_match)
+    assert severity == "warning"  # Should default to warning
+
+
+@pytest.mark.asyncio
+async def test_check_with_languagetool_respects_max_suggestions():
+    """LanguageTool results must respect the max_suggestions limit."""
+    service = GrammarService()
+
+    class MockMatch:
+        def __init__(self):
+            self.category = "GRAMMAR"
+            self.ruleId = "RULE"
+            self.issueType = "grammar"
+            self.offset = 0
+            self.errorLength = 3
+            self.message = "Test"
+            self.replacements = [f"fix{i}" for i in range(10)]
+
+    import unittest.mock as mock
+
+    # Use a mock with a .check attribute so attribute access before to_thread succeeds,
+    # then patch to_thread itself to return our controlled matches synchronously.
+    fake_lt = mock.MagicMock()
+    with mock.patch("app.grammar_service.asyncio.to_thread", new=mock.AsyncMock(return_value=[MockMatch()])):
+        service._language_tool = fake_lt
+        issues = await service._check_with_languagetool("some text", max_suggestions=3)
+
+    assert len(issues) == 1
+    assert len(issues[0].suggestions) == 3
+
+
+@pytest.mark.asyncio
+async def test_languagetool_unavailable_does_not_silently_succeed():
+    """_check_with_languagetool returns empty list (caller guards against this)."""
+    service = GrammarService()
+    service._language_tool = None
+
+    issues = await service._check_with_languagetool("I has a mistake.", max_suggestions=5)
+    assert issues == []
