@@ -135,11 +135,10 @@ class GrammarService:
             if draft.spanEnd <= draft.spanStart:
                 continue
             # Clamp spans to valid chunk text bounds
-            if draft.spanStart < 0 or draft.spanEnd > chunk_len:
-                draft.spanStart = max(0, min(draft.spanStart, chunk_len))
-                draft.spanEnd = max(0, min(draft.spanEnd, chunk_len))
-                if draft.spanEnd <= draft.spanStart:
-                    continue
+            draft.spanStart = max(0, min(draft.spanStart, chunk_len))
+            draft.spanEnd = max(0, min(draft.spanEnd, chunk_len))
+            if draft.spanEnd <= draft.spanStart:
+                continue
             if self._looks_like_false_positive(chunk.text, draft.spanStart, draft.spanEnd):
                 continue
             severity = draft.severity
