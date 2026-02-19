@@ -99,7 +99,7 @@ class GrammarService:
 
         all_issues = []
         offset = 0
-        failures = 0
+        any_success = False
         last_error = None
 
         for chunk in chunks:
@@ -115,15 +115,15 @@ class GrammarService:
                     issue.plainRange.end += offset
 
                 all_issues.extend(chunk_issues)
+                any_success = True
 
             except Exception as e:
                 logger.error(f"Failed to check chunk at offset {offset}: {e}")
-                failures += 1
                 last_error = e
 
             offset += len(chunk)
 
-        if failures == len(chunks):
+        if not any_success:
             raise RuntimeError("All LLM chunk checks failed") from last_error
 
         return all_issues

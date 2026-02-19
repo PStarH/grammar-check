@@ -83,7 +83,8 @@ async def test_check_text_empty_hybrid_engine():
 
 
 class _AlwaysFailLLMClient:
-    async def check_grammar(self, text: str, max_suggestions: int = 5):  # noqa: ARG002
+    async def check_grammar(self, text: str, max_suggestions: int = 5):
+        _ = (text, max_suggestions)
         raise TimeoutError("LLM timeout")
 
 
