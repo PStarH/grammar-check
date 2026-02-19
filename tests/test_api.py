@@ -126,3 +126,43 @@ def test_grammar_check_options():
 
     # Structure validation
     assert response.status_code in [200, 500, 503]
+
+
+def test_grammar_check_with_use_ai_false():
+    """Test grammar check with useAI=false to use only LanguageTool."""
+    request_data = {
+        "html": "<p>This is a test sentence.</p>",
+        "language": "en-US",
+        "options": {
+            "useAI": False,
+            "mode": "fast",
+        },
+    }
+
+    response = client.post("/v1/grammar/check", json=request_data)
+
+    # Should succeed without LLM configuration when useAI=false
+    if response.status_code == 200:
+        data = response.json()
+        assert data["stats"]["engine"] == "languagetool"
+        assert "plainText" in data
+        assert "issues" in data
+
+
+def test_grammar_check_with_use_ai_true_and_fast_mode():
+    """Test that useAI option overrides mode when explicitly set."""
+    request_data = {
+        "html": "<p>Test text</p>",
+        "language": "en-US",
+        "options": {
+            "useAI": False,
+            "mode": "best_quality",  # This should be overridden
+        },
+    }
+
+    response = client.post("/v1/grammar/check", json=request_data)
+
+    # When useAI=false, should use LanguageTool regardless of mode
+    if response.status_code == 200:
+        data = response.json()
+        assert data["stats"]["engine"] == "languagetool"

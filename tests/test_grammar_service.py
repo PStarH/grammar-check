@@ -137,3 +137,55 @@ def test_sentence_splitting_edge_cases():
     text = "No punctuation here"
     sentences = service._split_into_sentences(text)
     assert len(sentences) == 1
+
+
+@pytest.mark.asyncio
+async def test_check_text_with_languagetool():
+    """Test checking text with LanguageTool."""
+    service = GrammarService(llm_client=None)
+    
+    # Only test if LanguageTool is available
+    if service._language_tool:
+        text = "I has a mistake here."
+        issues, engine = await service.check_text(text, mode="fast", use_ai=False)
+        
+        # LanguageTool should be used and might find issues
+        assert engine == "languagetool"
+        # We can't guarantee issues found as it depends on LanguageTool availability
+        assert isinstance(issues, list)
+
+
+@pytest.mark.asyncio
+async def test_check_text_with_use_ai_false():
+    """Test that useAI=False forces LanguageTool only."""
+    service = GrammarService(llm_client=None)
+    
+    text = "This is a test."
+    issues, engine = await service.check_text(text, mode="best_quality", use_ai=False)
+    
+    # Should use LanguageTool even with best_quality mode when useAI=False
+    assert engine == "languagetool"
+    assert isinstance(issues, list)
+
+
+@pytest.mark.asyncio
+async def test_languagetool_mapping_functions():
+    """Test LanguageTool type and severity mapping."""
+    service = GrammarService()
+    
+    # Create a mock match object
+    class MockMatch:
+        def __init__(self):
+            self.category = "GRAMMAR"
+            self.ruleId = "GRAMMAR_ERROR"
+            self.issueType = "misspelling"
+    
+    match = MockMatch()
+    
+    # Test type mapping
+    issue_type = service._map_languagetool_type(match)
+    assert issue_type in ["grammar", "spelling", "style"]
+    
+    # Test severity mapping
+    severity = service._map_languagetool_severity(match)
+    assert severity in ["error", "warning", "info"]
