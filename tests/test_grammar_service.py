@@ -204,3 +204,41 @@ async def test_languagetool_mapping_functions():
     
     severity = service._map_languagetool_severity(incomplete_match)
     assert severity == "warning"  # Should default to warning
+
+
+@pytest.mark.asyncio
+async def test_check_with_languagetool_respects_max_suggestions():
+    """LanguageTool results must respect the max_suggestions limit."""
+    service = GrammarService()
+
+    class MockMatch:
+        def __init__(self):
+            self.category = "GRAMMAR"
+            self.ruleId = "RULE"
+            self.issueType = "grammar"
+            self.offset = 0
+            self.errorLength = 3
+            self.message = "Test"
+            self.replacements = [f"fix{i}" for i in range(10)]
+
+    import unittest.mock as mock
+
+    # Use a mock with a .check attribute so attribute access before to_thread succeeds,
+    # then patch to_thread itself to return our controlled matches synchronously.
+    fake_lt = mock.MagicMock()
+    with mock.patch("app.grammar_service.asyncio.to_thread", new=mock.AsyncMock(return_value=[MockMatch()])):
+        service._language_tool = fake_lt
+        issues = await service._check_with_languagetool("some text", max_suggestions=3)
+
+    assert len(issues) == 1
+    assert len(issues[0].suggestions) == 3
+
+
+@pytest.mark.asyncio
+async def test_languagetool_unavailable_does_not_silently_succeed():
+    """_check_with_languagetool returns empty list (caller guards against this)."""
+    service = GrammarService()
+    service._language_tool = None
+
+    issues = await service._check_with_languagetool("I has a mistake.", max_suggestions=5)
+    assert issues == []

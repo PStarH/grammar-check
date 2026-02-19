@@ -128,6 +128,30 @@ def test_grammar_check_options():
     assert response.status_code in [200, 500, 503]
 
 
+def test_grammar_check_use_ai_false_no_languagetool_returns_503():
+    """When useAI=false and LanguageTool is unavailable, expect 503."""
+    from unittest.mock import patch
+
+    request_data = {
+        "html": "<p>I has a mistake here.</p>",
+        "language": "en-US",
+        "options": {"useAI": False},
+    }
+
+    # Force _language_tool to None on the running service
+    import app.main as main_mod
+
+    original = main_mod.grammar_service._language_tool if main_mod.grammar_service else None
+    try:
+        if main_mod.grammar_service:
+            main_mod.grammar_service._language_tool = None
+        response = client.post("/v1/grammar/check", json=request_data)
+        assert response.status_code == 503
+    finally:
+        if main_mod.grammar_service:
+            main_mod.grammar_service._language_tool = original
+
+
 def test_grammar_check_with_use_ai_false():
     """Test grammar check with useAI=false to use only LanguageTool."""
     request_data = {
@@ -141,7 +165,7 @@ def test_grammar_check_with_use_ai_false():
 
     response = client.post("/v1/grammar/check", json=request_data)
 
-    # Should succeed without LLM configuration when useAI=false
+    # Should succeed without LLM configuration when useAI=false and LanguageTool is available
     if response.status_code == 200:
         data = response.json()
         assert data["stats"]["engine"] == "languagetool"

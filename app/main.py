@@ -116,6 +116,18 @@ async def check_grammar(request: GrammarCheckRequest):
                     ),
                 )
 
+        if not request.options.useAI and (
+            not grammar_service or not grammar_service._language_tool
+        ):
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "No checking engine available. "
+                    "Install language-tool-python and ensure LanguageTool is enabled, "
+                    "or set useAI=true and configure LLM_API_KEY."
+                ),
+            )
+
         issues, engine = await grammar_service.check_text(
             plain_text,
             mode=request.options.mode,

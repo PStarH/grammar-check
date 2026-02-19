@@ -93,10 +93,10 @@ class GrammarService:
                     engine = "hybrid"
                 except Exception as e:
                     logger.warning(f"LLM check failed, falling back to LanguageTool: {e}")
-                    issues = await self._check_with_languagetool(text)
+                    issues = await self._check_with_languagetool(text, max_suggestions)
                     engine = "fallback"
             elif mode == "fast":
-                issues = await self._check_with_languagetool(text)
+                issues = await self._check_with_languagetool(text, max_suggestions)
                 engine = "languagetool"
             else:
                 issues = await self._check_with_llm(text, max_suggestions)
@@ -159,11 +159,12 @@ class GrammarService:
 
         return all_issues
 
-    async def _check_with_languagetool(self, text: str) -> list[GrammarIssue]:
+    async def _check_with_languagetool(self, text: str, max_suggestions: int = 5) -> list[GrammarIssue]:
         """Check text using LanguageTool.
 
         Args:
             text: Text to check
+            max_suggestions: Maximum suggestions per issue
 
         Returns:
             List of grammar issues
@@ -197,7 +198,7 @@ class GrammarService:
                         "end": match.offset + match.errorLength
                     },
                     context=context,
-                    suggestions=[repl for repl in match.replacements[:5]],
+                    suggestions=[repl for repl in match.replacements[:max_suggestions]],
                     replacement=match.replacements[0] if match.replacements else None,
                     confidence=0.7  # LanguageTool doesn't provide confidence scores
                 )
