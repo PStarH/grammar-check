@@ -31,6 +31,7 @@ class LanguageToolClient:
             offset = int(m.get("offset", 0))
             length = int(m.get("length", 0))
             replacements = [r.get("value", "") for r in m.get("replacements", [])][:5]
+            non_empty_replacements = [s for s in replacements if s]
             issues.append(
                 Issue(
                     type="grammar",
@@ -41,8 +42,8 @@ class LanguageToolClient:
                     context=m.get("context", {}).get(
                         "text", text[max(0, offset - 20) : offset + length + 20]
                     ),
-                    suggestions=[s for s in replacements if s],
-                    replacement=replacements[0] if replacements else None,
+                    suggestions=non_empty_replacements,
+                    replacement=non_empty_replacements[0] if non_empty_replacements else None,
                     confidence=0.6,
                     ruleId=m.get("rule", {}).get("id"),
                 )
