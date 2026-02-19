@@ -32,7 +32,7 @@ class GrammarService:
             try:
                 languagetool_url = os.getenv("LANGUAGETOOL_URL")
                 if languagetool_url:
-                    self._language_tool = language_tool_python.LanguageToolPublicAPI(languagetool_url)
+                    self._language_tool = language_tool_python.LanguageTool('en-US', remote_server=languagetool_url)
                 else:
                     self._language_tool = language_tool_python.LanguageTool('en-US')
                 logger.info("LanguageTool initialized successfully")
@@ -211,14 +211,17 @@ class GrammarService:
         Returns:
             Issue type: "grammar", "spelling", or "style"
         """
-        category = match.category.lower() if hasattr(match, 'category') else ""
-        rule_id = (match.ruleId or "").lower()
-        
-        if "spell" in category or "spell" in rule_id or "typo" in category:
-            return "spelling"
-        elif "style" in category or "style" in rule_id:
-            return "style"
-        else:
+        try:
+            category = match.category.lower() if match.category else ""
+            rule_id = (match.ruleId or "").lower()
+            
+            if "spell" in category or "spell" in rule_id or "typo" in category:
+                return "spelling"
+            elif "style" in category or "style" in rule_id:
+                return "style"
+            else:
+                return "grammar"
+        except AttributeError:
             return "grammar"
     
     def _map_languagetool_severity(self, match) -> str:
@@ -230,14 +233,16 @@ class GrammarService:
         Returns:
             Severity: "error", "warning", or "info"
         """
-        # LanguageTool uses issueType which can be: addition, uncategorized, misspelling, etc.
-        issue_type = match.issueType.lower() if hasattr(match, 'issueType') else ""
-        
-        if "misspelling" in issue_type or "confusion" in issue_type:
-            return "error"
-        elif "style" in issue_type or "hint" in issue_type:
-            return "info"
-        else:
+        try:
+            issue_type = match.issueType.lower() if match.issueType else ""
+            
+            if "misspelling" in issue_type or "confusion" in issue_type:
+                return "error"
+            elif "style" in issue_type or "hint" in issue_type:
+                return "info"
+            else:
+                return "warning"
+        except AttributeError:
             return "warning"
 
     def _split_into_chunks(self, text: str) -> list[str]:

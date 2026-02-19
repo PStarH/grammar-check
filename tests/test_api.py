@@ -149,8 +149,8 @@ def test_grammar_check_with_use_ai_false():
         assert "issues" in data
 
 
-def test_grammar_check_with_use_ai_true_and_fast_mode():
-    """Test that useAI option overrides mode when explicitly set."""
+def test_grammar_check_with_use_ai_false_overrides_mode():
+    """Test that useAI=false overrides mode setting to force LanguageTool."""
     request_data = {
         "html": "<p>Test text</p>",
         "language": "en-US",

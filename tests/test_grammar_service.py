@@ -173,12 +173,16 @@ async def test_languagetool_mapping_functions():
     """Test LanguageTool type and severity mapping."""
     service = GrammarService()
     
-    # Create a mock match object
+    # Create a mock match object with all required attributes
     class MockMatch:
         def __init__(self):
             self.category = "GRAMMAR"
             self.ruleId = "GRAMMAR_ERROR"
             self.issueType = "misspelling"
+            self.offset = 0
+            self.errorLength = 5
+            self.message = "Test error message"
+            self.replacements = ["correction1", "correction2"]
     
     match = MockMatch()
     
@@ -189,3 +193,14 @@ async def test_languagetool_mapping_functions():
     # Test severity mapping
     severity = service._map_languagetool_severity(match)
     assert severity in ["error", "warning", "info"]
+    
+    # Test with missing attributes
+    class IncompleteMatch:
+        pass
+    
+    incomplete_match = IncompleteMatch()
+    issue_type = service._map_languagetool_type(incomplete_match)
+    assert issue_type == "grammar"  # Should default to grammar
+    
+    severity = service._map_languagetool_severity(incomplete_match)
+    assert severity == "warning"  # Should default to warning
