@@ -30,7 +30,7 @@ class LLMClient:
         """
         self.api_key = api_key or os.getenv("LLM_API_KEY")
         self.base_url = base_url or os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
-        self.model = model or os.getenv("LLM_MODEL", "gpt-4o-mini")
+        self.model = model or os.getenv("LLM_MODEL", "gpt-4.1-mini")
 
         if not self.api_key:
             raise ValueError("LLM_API_KEY must be set")

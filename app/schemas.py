@@ -9,22 +9,30 @@ class CheckOptions(BaseModel):
     """Options for grammar checking."""
 
     skipTags: list[str] = Field(
-        default=["script", "style", "code", "pre"],
+        default_factory=lambda: ["script", "style", "code", "pre"],
         description="HTML tags to skip during text extraction",
     )
     mode: Literal["best_quality", "hybrid", "fast"] = Field(
         default="best_quality",
         description=(
             "Checking mode: best_quality (LLM), "
-            "hybrid (LLM+LanguageTool), fast (LanguageTool only)"
+            "hybrid (LLM+LanguageTool), fast (non-AI engine)"
         ),
     )
     useAI: bool = Field(
         default=True,
-        description="Whether to use AI (LLM) for grammar checking. If false, only LanguageTool is used."
+        description=(
+            "Whether to use AI (LLM) for grammar checking. "
+            "If false, non-AI checking is used (LanguageTool or basic rules fallback)."
+        )
     )
     returnCorrectedHtml: bool = Field(default=False, description="Whether to return corrected HTML")
-    maxSuggestions: int = Field(default=5, description="Maximum number of suggestions per issue")
+    maxSuggestions: int = Field(
+        default=5,
+        ge=1,
+        le=100,
+        description="Maximum number of suggestions per issue (1-100)",
+    )
 
 
 class GrammarCheckRequest(BaseModel):
@@ -70,7 +78,7 @@ class ResponseStats(BaseModel):
     """Statistics about the response."""
 
     latencyMs: int = Field(..., description="Request processing latency in milliseconds")
-    engine: Literal["llm", "hybrid", "languagetool", "fallback"] = Field(
+    engine: Literal["llm", "hybrid", "languagetool", "basic_rules", "fallback"] = Field(
         ..., description="Engine used for checking"
     )
 

@@ -29,8 +29,95 @@ class GrammarService:
         """
         self.llm_client = llm_client
         self.max_chunk_size = 2000  # characters per chunk
-        self.max_input_length = 50000  # maximum input length
-        
+        self.max_input_length = int(os.getenv("MAX_INPUT_LENGTH", "120000"))
+        self._basic_rule_checker_enabled = (
+            os.getenv("BASIC_RULES_ENABLED", "true").lower() == "true"
+        )
+
+        self._basic_rules = [
+            {
+                "pattern": re.compile(r"\b[Ii]\s+has\b"),
+                "type": "grammar",
+                "severity": "error",
+                "message": "Subject-verb agreement: use 'I have'.",
+                "short": "Subject-verb agreement",
+                "suggestions": ["I have"],
+                "confidence": 0.82,
+            },
+            {
+                "pattern": re.compile(r"\b[Tt]heir\s+going\b"),
+                "type": "grammar",
+                "severity": "error",
+                "message": "Possessive pronoun used as contraction: use 'They're going'.",
+                "short": "Wrong word form",
+                "suggestions": ["They're going"],
+                "confidence": 0.78,
+            },
+            {
+                "pattern": re.compile(r"\b([Hh]e|[Ss]he|[Ii]t)\s+go\b"),
+                "type": "grammar",
+                "severity": "warning",
+                "message": "Possible tense/agreement issue. Consider 'goes' or past tense form.",
+                "short": "Possible agreement issue",
+                "suggestions": ["goes", "went"],
+                "confidence": 0.72,
+            },
+            {
+                "pattern": re.compile(r"\b[Tt]hey\s+was\b"),
+                "type": "grammar",
+                "severity": "error",
+                "message": "Plural subject should use 'were'.",
+                "short": "Subject-verb agreement",
+                "suggestions": ["they were"],
+                "confidence": 0.8,
+            },
+            {
+                "pattern": re.compile(r"\b([Aa])\s+([aeiouAEIOU]\w*)"),
+                "type": "grammar",
+                "severity": "warning",
+                "message": "Use 'an' before words starting with vowel sounds.",
+                "short": "Article usage",
+                "suggestions": ["an"],
+                "confidence": 0.65,
+            },
+            {
+                "pattern": re.compile(r"\b([Aa]n)\s+([^aeiouAEIOU\W]\w*)"),
+                "type": "grammar",
+                "severity": "warning",
+                "message": "Use 'a' before words starting with consonant sounds.",
+                "short": "Article usage",
+                "suggestions": ["a"],
+                "confidence": 0.62,
+            },
+            {
+                "pattern": re.compile(r"\bcould of\b"),
+                "type": "grammar",
+                "severity": "error",
+                "message": "Use 'could have' instead of 'could of'.",
+                "short": "Wrong phrase",
+                "suggestions": ["could have"],
+                "confidence": 0.86,
+            },
+            {
+                "pattern": re.compile(r"\bshould of\b"),
+                "type": "grammar",
+                "severity": "error",
+                "message": "Use 'should have' instead of 'should of'.",
+                "short": "Wrong phrase",
+                "suggestions": ["should have"],
+                "confidence": 0.86,
+            },
+            {
+                "pattern": re.compile(r"\bwould of\b"),
+                "type": "grammar",
+                "severity": "error",
+                "message": "Use 'would have' instead of 'would of'.",
+                "short": "Wrong phrase",
+                "suggestions": ["would have"],
+                "confidence": 0.86,
+            },
+        ]
+
         # Initialize LanguageTool
         self._language_tool = None
         self._language_tool_enabled = os.getenv("LANGUAGETOOL_ENABLED", "true").lower() == "true"
@@ -38,7 +125,9 @@ class GrammarService:
             try:
                 languagetool_url = os.getenv("LANGUAGETOOL_URL")
                 if languagetool_url:
-                    self._language_tool = language_tool_python.LanguageTool('en-US', remote_server=languagetool_url)
+                    self._language_tool = language_tool_python.LanguageTool(
+                        'en-US', remote_server=languagetool_url
+                    )
                 else:
                     self._language_tool = language_tool_python.LanguageTool('en-US')
                 logger.info("LanguageTool initialized successfully")
@@ -46,6 +135,11 @@ class GrammarService:
                 logger.warning(f"Failed to initialize LanguageTool: {e}")
         elif self._language_tool_enabled and not _LANGUAGE_TOOL_AVAILABLE:
             logger.info("language-tool-python not installed; LanguageTool checking disabled")
+
+
+    def has_non_ai_engine(self) -> bool:
+        """Return whether any non-AI engine is available."""
+        return self._language_tool is not None or self._basic_rule_checker_enabled
 
     async def check_text(
         self,
@@ -67,7 +161,7 @@ class GrammarService:
         """
         if not text or not text.strip():
             if mode == "fast" or not use_ai:
-                return [], "languagetool"
+                return [], self._get_non_ai_engine_name()
             if mode == "hybrid":
                 return [], "hybrid"
             return [], "llm"
@@ -97,7 +191,7 @@ class GrammarService:
                     engine = "fallback"
             elif mode == "fast":
                 issues = await self._check_with_languagetool(text, max_suggestions)
-                engine = "languagetool"
+                engine = self._get_non_ai_engine_name()
             else:
                 issues = await self._check_with_llm(text, max_suggestions)
 
@@ -107,6 +201,14 @@ class GrammarService:
             logger.error(f"Grammar check failed: {e}")
             # Return empty list on error
             return [], "fallback"
+
+    def _get_non_ai_engine_name(self) -> str:
+        """Return which non-AI engine would be used."""
+        if self._language_tool is not None:
+            return "languagetool"
+        if self._basic_rule_checker_enabled:
+            return "basic_rules"
+        return "fallback"
 
     async def _check_with_llm(
         self,
@@ -159,7 +261,9 @@ class GrammarService:
 
         return all_issues
 
-    async def _check_with_languagetool(self, text: str, max_suggestions: int = 5) -> list[GrammarIssue]:
+    async def _check_with_languagetool(
+        self, text: str, max_suggestions: int = 5
+    ) -> list[GrammarIssue]:
         """Check text using LanguageTool.
 
         Args:
@@ -170,8 +274,11 @@ class GrammarService:
             List of grammar issues
         """
         if not self._language_tool:
-            logger.warning("LanguageTool not available, returning empty list")
-            return []
+            if not self._basic_rule_checker_enabled:
+                logger.warning("LanguageTool and basic rules are disabled, returning empty list")
+                return []
+            logger.warning("LanguageTool not available, using built-in basic rules")
+            return self._check_with_basic_rules(text, max_suggestions)
         
         try:
             # LanguageTool is synchronous; run in a thread to avoid blocking the event loop
@@ -209,7 +316,40 @@ class GrammarService:
         except Exception as e:
             logger.error(f"LanguageTool check failed: {e}")
             return []
-    
+
+    def _check_with_basic_rules(self, text: str, max_suggestions: int = 5) -> list[GrammarIssue]:
+        """Check text using a small built-in rule set.
+
+        This is a minimal fallback to keep the API usable when neither
+        LanguageTool nor LLM is available.
+        """
+        safe_max_suggestions = max(1, min(max_suggestions, 100))
+
+        issues: list[GrammarIssue] = []
+        for rule in self._basic_rules:
+            pattern = rule["pattern"]
+            suggestions = rule["suggestions"]
+            replacement = suggestions[0] if suggestions else None
+            for match in pattern.finditer(text):
+                context_start = max(0, match.start() - 20)
+                context_end = min(len(text), match.end() + 20)
+                issues.append(
+                    GrammarIssue(
+                        type=rule["type"],
+                        severity=rule["severity"],
+                        message=rule["message"],
+                        shortMessage=rule["short"],
+                        plainRange={"start": match.start(), "end": match.end()},
+                        context=text[context_start:context_end],
+                        suggestions=suggestions[:safe_max_suggestions],
+                        replacement=replacement,
+                        confidence=rule["confidence"],
+                    )
+                )
+
+        issues.sort(key=lambda i: (i.plainRange.start, i.plainRange.end))
+        return issues
+
     def _map_languagetool_type(self, match) -> str:
         """Map LanguageTool issue type to our type.
         
