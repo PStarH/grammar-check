@@ -100,6 +100,10 @@ async def check_grammar(request: GrammarCheckRequest):
     )
 
     try:
+        global grammar_service
+        if grammar_service is None:
+            grammar_service = GrammarService(llm_client=None)
+
         # Extract plain text from HTML
         plain_text = extract_plain_text(request.html, skip_tags=request.options.skipTags)
 
@@ -117,7 +121,7 @@ async def check_grammar(request: GrammarCheckRequest):
                 )
 
         if not request.options.useAI and (
-            not grammar_service or not grammar_service._language_tool
+            not grammar_service or not grammar_service.has_non_ai_engine()
         ):
             raise HTTPException(
                 status_code=503,

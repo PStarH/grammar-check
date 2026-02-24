@@ -1,84 +1,27 @@
-# Grammar Check Service
+# Grammar Check API（前端接入文档）
 
-High-quality English grammar checking service for HTML strings, powered by LLM technology.
+> 面向前端工程师：如何在 Web / Node / SSR 中稳定接入语法检查服务。
 
-## Features
+## 1. 服务定位
 
-- 🎯 **Best-in-class quality**: Uses LLM (GPT-4o-mini by default) for superior grammar correction
-- 🏷️ **HTML-aware**: Safely parses HTML and extracts only visible text
-- 🔧 **Configurable**: Skip specific HTML tags, adjust chunk sizes, set max suggestions
-- 🚀 **Production-ready**: Includes Docker support, health checks, and structured logging
-- 📊 **Detailed feedback**: Returns issues with severity, suggestions, confidence scores, and context
-- 🛡️ **Robust**: Built-in retry logic, error handling, and graceful fallbacks
+这个服务接收 **HTML 字符串**，自动提取可见文本并返回语法问题列表。
 
-## Quick Start
+- Endpoint: `POST /v1/grammar/check`
+- Health: `GET /health`
+- Content-Type: `application/json`
 
-### Prerequisites
+---
 
-- Python 3.11+
-- OpenAI API key (or compatible LLM API)
+## 2. 前端最常用接入方式
 
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/PStarH/grammar-check.git
-cd grammar-check
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### Configuration
-
-Copy the example environment file and configure your LLM API:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` and set your API key:
-
-```env
-LLM_API_KEY=your-api-key-here
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_MODEL=gpt-4o-mini
-```
-
-### Run the Server
-
-```bash
-# Development
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# Production
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
-```
-
-### Using Docker
-
-```bash
-# Build and run with docker-compose
-docker-compose up -d
-
-# Or build manually
-docker build -t grammar-check .
-docker run -p 8000:8000 --env-file .env grammar-check
-```
-
-## API Documentation
-
-### Health Check
+### 2.1 健康检查
 
 ```bash
 curl http://localhost:8000/health
 ```
 
-Response:
+示例响应：
+
 ```json
 {
   "status": "ok",
@@ -86,323 +29,146 @@ Response:
 }
 ```
 
-### Grammar Check
+### 2.2 语法检查（最小请求）
 
-**Endpoint:** `POST /v1/grammar/check`
-
-#### Request Schema
-
-```json
-{
-  "requestId": "optional-client-id",
-  "contentType": "text/html",
-  "language": "en-US",
-  "html": "<p>He go to school yesterday.</p>",
-  "options": {
-    "skipTags": ["script", "style", "code", "pre"],
-    "mode": "best_quality",
-    "returnCorrectedHtml": false,
-    "maxSuggestions": 5
-  }
-}
+```bash
+curl -X POST http://localhost:8000/v1/grammar/check \
+  -H "Content-Type: application/json" \
+  -d '{
+    "html": "<p>I has a apple.</p>",
+    "language": "en-US"
+  }'
 ```
 
-#### Request Fields
+---
 
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `requestId` | string | No | auto-generated | Client-provided request ID for tracking |
-| `contentType` | string | No | "text/html" | Content type (only text/html supported) |
-| `language` | string | No | "en-US" | Language code |
-| `html` | string | Yes | - | HTML content to check |
-| `options.skipTags` | array | No | ["script","style","code","pre"] | HTML tags to skip |
-| `options.mode` | string | No | "best_quality" | Checking mode (see below) |
-| `options.returnCorrectedHtml` | boolean | No | false | Return corrected HTML |
-| `options.maxSuggestions` | number | No | 5 | Max suggestions per issue |
+## 3. 请求参数（前端视角）
 
-**Checking Modes:**
-- `best_quality`: LLM-only (highest quality)
-- `hybrid`: LLM with LanguageTool fallback
-- `fast`: LanguageTool only (not fully implemented)
+```ts
+type GrammarCheckRequest = {
+  requestId?: string;
+  contentType?: "text/html"; // 默认 text/html
+  language?: string;           // 默认 en-US
+  html: string;                // 必填，HTML 字符串
+  options?: {
+    skipTags?: string[];       // 默认 ["script","style","code","pre"]
+    mode?: "best_quality" | "hybrid" | "fast";
+    useAI?: boolean;           // 默认 true
+    returnCorrectedHtml?: boolean; // 当前一般返回 null
+    maxSuggestions?: number;   // 1~100，默认 5
+  };
+};
+```
 
-#### Response Schema
+### mode 选择建议
 
-```json
-{
-  "requestId": "...",
-  "detectedLanguage": "en",
-  "plainText": "He go to school yesterday.",
-  "issues": [
-    {
-      "type": "grammar",
-      "severity": "error",
-      "message": "Subject-verb agreement error. 'He' requires 'goes' or 'went'.",
-      "shortMessage": "Subject-verb agreement",
-      "plainRange": {
-        "start": 3,
-        "end": 5
+- `best_quality`: 质量优先（LLM）
+- `hybrid`: LLM 优先，失败回退非 AI
+- `fast`: 非 AI 路径（LanguageTool 优先，必要时 basic_rules）
+
+---
+
+## 4. 响应结构（前端可直接消费）
+
+```ts
+type GrammarIssue = {
+  type: "grammar" | "spelling" | "style";
+  severity: "error" | "warning" | "info";
+  message: string;
+  shortMessage: string;
+  plainRange: { start: number; end: number }; // 对应 plainText 的偏移
+  context: string;
+  suggestions: string[];
+  replacement: string | null;
+  confidence: number; // 0~1
+};
+
+type GrammarCheckResponse = {
+  requestId: string | null;
+  detectedLanguage: string;
+  plainText: string;
+  issues: GrammarIssue[];
+  stats: {
+    latencyMs: number;
+    engine: "llm" | "hybrid" | "languagetool" | "basic_rules" | "fallback";
+  };
+  correctedHtml: string | null;
+};
+```
+
+---
+
+## 5. 浏览器端调用示例（fetch）
+
+```ts
+export async function checkGrammar(html: string) {
+  const res = await fetch("/v1/grammar/check", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      requestId: crypto.randomUUID(),
+      language: "en-US",
+      html,
+      options: {
+        mode: "hybrid",
+        useAI: true,
+        maxSuggestions: 5,
       },
-      "context": "He go to school",
-      "suggestions": ["went", "goes"],
-      "replacement": "went",
-      "confidence": 0.95
-    }
-  ],
-  "stats": {
-    "latencyMs": 1234,
-    "engine": "llm"
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail || `Grammar API failed: ${res.status}`);
   }
+
+  return (await res.json()) as GrammarCheckResponse;
 }
 ```
 
-#### Response Fields
+---
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `requestId` | string | Request ID (echoed or generated) |
-| `detectedLanguage` | string | Detected language code |
-| `plainText` | string | Extracted visible text from HTML |
-| `issues` | array | List of grammar issues found |
-| `issues[].type` | string | Issue type: grammar, spelling, or style |
-| `issues[].severity` | string | Severity: error, warning, or info |
-| `issues[].message` | string | Detailed explanation |
-| `issues[].shortMessage` | string | Brief label |
-| `issues[].plainRange` | object | Character offsets in plainText |
-| `issues[].context` | string | Text snippet around the issue |
-| `issues[].suggestions` | array | Suggested corrections |
-| `issues[].replacement` | string | Best suggestion |
-| `issues[].confidence` | number | Confidence score (0.0-1.0) |
-| `stats.latencyMs` | number | Processing time in milliseconds |
-| `stats.engine` | string | Engine used: llm, hybrid, languagetool, fallback |
+## 6. UI 渲染建议
 
-### Example Usage
+1. 使用 `plainText + plainRange` 在纯文本层做高亮。
+2. 仅对 `severity === "error"` 默认高亮，`warning/info` 折叠显示。
+3. 若 `suggestions.length > 0`，给一键替换按钮。
+4. 展示 `stats.engine` 和 `stats.latencyMs`，便于排查环境问题。
 
-#### Basic Check
+---
 
-```bash
-curl -X POST http://localhost:8000/v1/grammar/check \
-  -H "Content-Type: application/json" \
-  -d '{
-    "html": "<p>He go to school yesterday.</p>",
-    "language": "en-US"
-  }'
-```
+## 7. 错误码与前端处理策略
 
-#### With Custom Options
+- `200`: 成功（可能 issues 为空）
+- `422`: 请求参数不合法（比如 `maxSuggestions` 超出 1~100）
+- `503`: 当前模式所需引擎不可用（例如请求 AI 但没配置 LLM）
+- `500`: 服务内部错误
 
-```bash
-curl -X POST http://localhost:8000/v1/grammar/check \
-  -H "Content-Type: application/json" \
-  -d '{
-    "requestId": "req-123",
-    "html": "<div><p>Their going to the store.</p><script>alert(\"test\");</script></div>",
-    "language": "en-US",
-    "options": {
-      "skipTags": ["script", "style"],
-      "mode": "best_quality",
-      "maxSuggestions": 3
-    }
-  }'
-```
+建议：
+- 422：在表单层阻止并提示用户修正参数。
+- 503：提示“服务降级”，允许用户切换 `useAI=false` 或 `mode=fast`。
+- 500：可重试 + 上报日志（带 `requestId`）。
 
-#### Complex HTML
+---
+
+## 8. 生产环境建议（给前端联调）
+
+- 每次请求带 `requestId`（前端生成 UUID）。
+- 做 8~15s 请求超时控制。
+- 对同一段文本做防抖（300~500ms）。
+- 大文本分段提交，避免一次发送过长 HTML。
+- 记录 `requestId + engine + latencyMs` 到前端埋点。
+
+---
+
+## 9. 本地启动（供前端联调）
 
 ```bash
-curl -X POST http://localhost:8000/v1/grammar/check \
-  -H "Content-Type: application/json" \
-  -d '{
-    "html": "<article><h1>News Article</h1><p>The company have announced a new product. It will be available in stores soon.</p></article>",
-    "language": "en-US"
-  }'
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-## Development
+可用后访问：
+- `http://localhost:8000/health`
+- `http://localhost:8000/docs`（OpenAPI）
 
-### Install Development Dependencies
-
-```bash
-pip install -r requirements-dev.txt
-```
-
-### Run Tests
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=app --cov-report=html
-
-# Run specific test file
-pytest tests/test_html_extract.py
-
-# Run with verbose output
-pytest -v
-```
-
-### Code Formatting and Linting
-
-```bash
-# Format code with Black
-black app/ tests/
-
-# Lint with Ruff
-ruff check app/ tests/
-
-# Fix auto-fixable issues
-ruff check --fix app/ tests/
-```
-
-## Project Structure
-
-```
-grammar-check/
-├── app/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI application
-│   ├── schemas.py           # Pydantic models
-│   ├── html_extract.py      # HTML parsing and text extraction
-│   ├── llm_client.py        # LLM integration
-│   └── grammar_service.py   # Grammar checking orchestration
-├── tests/
-│   ├── __init__.py
-│   ├── test_html_extract.py
-│   ├── test_grammar_service.py
-│   └── test_api.py
-├── .env.example             # Example environment variables
-├── .gitignore
-├── docker-compose.yml
-├── Dockerfile
-├── pyproject.toml           # Project configuration
-├── requirements.txt         # Production dependencies
-├── requirements-dev.txt     # Development dependencies
-└── README.md
-```
-
-## Architecture
-
-### HTML Processing Flow
-
-1. **HTML Parsing**: Uses BeautifulSoup to safely parse HTML
-2. **Tag Filtering**: Removes specified tags (script, style, etc.)
-3. **Text Extraction**: Extracts only visible text nodes
-4. **Normalization**: Converts HTML entities, normalizes whitespace
-5. **Plain Text**: Returns clean text with character offsets
-
-### Grammar Checking Flow
-
-1. **Text Chunking**: Splits long text into manageable chunks (~2000 chars)
-2. **LLM Processing**: Sends each chunk to LLM with structured prompt
-3. **Issue Parsing**: Validates and parses JSON response from LLM
-4. **Offset Merging**: Adjusts character offsets for merged results
-5. **Response Building**: Constructs final response with statistics
-
-### Error Handling
-
-- **Retry Logic**: 3 attempts with exponential backoff for LLM calls
-- **Timeouts**: 30-second timeout per LLM request
-- **Fallback**: Returns empty issues list on error (graceful degradation)
-- **Validation**: Strict JSON schema validation for LLM responses
-
-## Configuration
-
-### Environment Variables
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `LLM_API_KEY` | Yes | - | API key for LLM service |
-| `LLM_BASE_URL` | No | https://api.openai.com/v1 | Base URL for LLM API |
-| `LLM_MODEL` | No | gpt-4o-mini | Model name to use |
-| `LOG_LEVEL` | No | INFO | Logging level |
-
-### Limits
-
-- Maximum input length: 50,000 characters
-- Chunk size: 2,000 characters
-- LLM timeout: 30 seconds per request
-- Max retries: 3 attempts
-
-## Production Deployment
-
-### Using Gunicorn
-
-```bash
-gunicorn app.main:app \
-  --workers 4 \
-  --worker-class uvicorn.workers.UvicornWorker \
-  --bind 0.0.0.0:8000 \
-  --timeout 60 \
-  --log-level info
-```
-
-### Using Docker Swarm
-
-```yaml
-version: '3.8'
-services:
-  grammar-check:
-    image: grammar-check:latest
-    deploy:
-      replicas: 3
-      restart_policy:
-        condition: on-failure
-    ports:
-      - "8000:8000"
-    environment:
-      - LLM_API_KEY=${LLM_API_KEY}
-```
-
-### Health Monitoring
-
-The service includes a `/health` endpoint that returns:
-- HTTP 200 on success
-- Service version
-- Ready/alive status
-
-Use this for:
-- Load balancer health checks
-- Kubernetes liveness/readiness probes
-- Monitoring systems
-
-## Troubleshooting
-
-### LLM Service Not Configured
-
-**Error**: `503 Service Unavailable: LLM service not configured`
-
-**Solution**: Set the `LLM_API_KEY` environment variable
-
-### JSON Parsing Errors
-
-**Issue**: LLM returns invalid JSON
-
-**Solution**: The service automatically tries to extract JSON from markdown code blocks and retries on failure
-
-### High Latency
-
-**Causes**:
-- Long input text (gets chunked)
-- Complex grammar issues
-- LLM API latency
-
-**Solutions**:
-- Use smaller text chunks
-- Consider caching for repeated checks
-- Scale horizontally with multiple workers
-
-## License
-
-MIT License - see LICENSE file for details
-
-## Contributing
-
-Contributions are welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
-5. Submit a pull request
-
-## Support
-
-For issues, questions, or contributions, please open an issue on GitHub.

@@ -128,9 +128,8 @@ def test_grammar_check_options():
     assert response.status_code in [200, 500, 503]
 
 
-def test_grammar_check_use_ai_false_no_languagetool_returns_503():
-    """When useAI=false and LanguageTool is unavailable, expect 503."""
-    from unittest.mock import patch
+def test_grammar_check_use_ai_false_no_languagetool_uses_basic_rules():
+    """When useAI=false and LanguageTool is unavailable, built-in rules should keep service usable."""
 
     request_data = {
         "html": "<p>I has a mistake here.</p>",
@@ -146,7 +145,10 @@ def test_grammar_check_use_ai_false_no_languagetool_returns_503():
         if main_mod.grammar_service:
             main_mod.grammar_service._language_tool = None
         response = client.post("/v1/grammar/check", json=request_data)
-        assert response.status_code == 503
+        assert response.status_code == 200
+        data = response.json()
+        assert data["stats"]["engine"] == "basic_rules"
+        assert isinstance(data["issues"], list)
     finally:
         if main_mod.grammar_service:
             main_mod.grammar_service._language_tool = original
@@ -168,7 +170,7 @@ def test_grammar_check_with_use_ai_false():
     # Should succeed without LLM configuration when useAI=false and LanguageTool is available
     if response.status_code == 200:
         data = response.json()
-        assert data["stats"]["engine"] == "languagetool"
+        assert data["stats"]["engine"] in ["languagetool", "basic_rules"]
         assert "plainText" in data
         assert "issues" in data
 
@@ -189,4 +191,53 @@ def test_grammar_check_with_use_ai_false_overrides_mode():
     # When useAI=false, should use LanguageTool regardless of mode
     if response.status_code == 200:
         data = response.json()
-        assert data["stats"]["engine"] == "languagetool"
+        assert data["stats"]["engine"] in ["languagetool", "basic_rules"]
+
+
+def test_grammar_check_invalid_max_suggestions_low():
+    """maxSuggestions below minimum should fail validation."""
+    request_data = {
+        "html": "<p>Test text</p>",
+        "options": {"maxSuggestions": 0},
+    }
+
+    response = client.post("/v1/grammar/check", json=request_data)
+    assert response.status_code == 422
+
+
+def test_grammar_check_invalid_max_suggestions_high():
+    """maxSuggestions above maximum should fail validation."""
+    request_data = {
+        "html": "<p>Test text</p>",
+        "options": {"maxSuggestions": 101},
+    }
+
+    response = client.post("/v1/grammar/check", json=request_data)
+    assert response.status_code == 422
+
+
+def test_grammar_check_large_article_high_max_suggestions():
+    """Large article with high maxSuggestions should be accepted for FE article workflow."""
+    article = """
+    <article>
+      <h1>Weekly Engineering Update</h1>
+      <p>I has reviewed the rollout notes and their going to publish them tomorrow.</p>
+      <p>They was also discussing why we could of delayed the migration, but an server outage happened.</p>
+      <p>It go smoothly in staging, yet should of included a backup checklist in the final version.</p>
+    </article>
+    """
+
+    request_data = {
+        "requestId": "article-check-1",
+        "language": "en-US",
+        "html": article,
+        "options": {"useAI": False, "mode": "fast", "maxSuggestions": 80},
+    }
+
+    response = client.post("/v1/grammar/check", json=request_data)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["requestId"] == "article-check-1"
+    assert data["stats"]["engine"] in ["languagetool", "basic_rules"]
+    assert isinstance(data["issues"], list)
+    assert len(data["plainText"]) > 50
